@@ -1,0 +1,17 @@
+2025-04-23 14:52:00 info: Congratulations, your extension "Embold" is now active!
+2025-04-23 14:52:00 info: ************* init ****************
+2025-04-23 14:52:00 info: tempDirectory : c:\Users\user\.cursor\extensions\embold-vscode.embold-0.2.0\temp
+2025-04-23 14:52:11 info: Extraction complete for source: c:\Users\user\.cursor\extensions\embold-vscode.embold-0.2.0\resources\embold-scanner-archive.zip, destination: c:\Users\user\.cursor\extensions\embold-vscode.embold-0.2.0\temp
+2025-04-23 14:52:11 info: Extension installed on machine OS : win32
+2025-04-23 14:52:11 info: Fetched the issues from DB
+2025-04-23 14:52:12 info: Java version installed on machine : 
+java version "24" 2025-03-18
+Java(TM) SE Runtime Environment (build 24+36-3646)
+Java HotSpot(TM) 64-Bit Server VM (build 24+36-3646, mixed mode, sharing)
+
+2025-04-23 14:52:12 info: Java installed on machine.
+2025-04-23 14:52:12 info: Embold extension version response:{"hasSupport":false,"version":"0.1.11","changeNotes":"<div> <p>Release Date: 09 Oct, 2023 <br><span>Bug fixes and improvements.</span></p> </div>"}
+2025-04-23 14:52:12 info: Current installed embold extension version : 0.2.0
+2025-04-23 14:52:12 info: Latest embold extension version on marketplace : 0.1.11
+2025-04-23 14:52:12 info: date:2025-04-23T11:52:12.524Z
+2025-04-23 14:52:12 info: extensionVersion:0.2.0
