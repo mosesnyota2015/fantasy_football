@@ -4,7 +4,7 @@ class Player {
   constructor(id, name, position, team = '', imageUrl = '', value = 0.0, stats = {}) {
     this.id = id;
     this.name = name;
-    this.position = position; // e.g., 'GK', 'DEF', 'MID', 'FWD'
+    this.position = position; //  'GK', 'DEF', 'MID', 'FWD'
     this.team = team;
     this.imageUrl = imageUrl;
     this.value = value; // Player value in millions
@@ -12,29 +12,57 @@ class Player {
       goals: stats.goals || 0,
       assists: stats.assists || 0,
       cleanSheets: stats.cleanSheets || 0, // CS
-      saves: stats.saves || 0,             // S (mainly for GK)
+      saves: stats.saves || 0,             // S (for GK)
       minutesPlayed: stats.minutesPlayed || 0,
       yellowCards: stats.yellowCards || 0, // Added
       redCards: stats.redCards || 0,       // Added
-      // Add other relevant stats if needed
+      totalPoints: 0
     };
-    // Calculate points based on stats (example scoring)
-    this.points = this.calculatePoints();
+    this.calculatePoints();
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }
 
   calculatePoints() {
     let points = 0;
-    // Basic scoring rules (customize as needed)
-    points += (this.stats.goals || 0) * (this.position === 'FWD' ? 4 : this.position === 'MID' ? 5 : 6);
-    points += (this.stats.assists || 0) * 3;
-    points += (this.stats.cleanSheets || 0) * (this.position === 'GK' || this.position === 'DEF' ? 4 : this.position === 'MID' ? 1 : 0);
-    points += Math.floor((this.stats.saves || 0) / 3) * (this.position === 'GK' ? 1 : 0); // 1 point per 3 saves for GK
-    points += Math.floor((this.stats.minutesPlayed || 0) / 60) * 2; // 2 points for playing 60+ mins
-    points -= (this.stats.yellowCards || 0) * 1; // -1 for yellow card
-    points -= (this.stats.redCards || 0) * 3;   // -3 for red card
-    // Add penalties saved, bonus points etc. later
+    
+    // Minutes played points
+    points += Math.floor(this.stats.minutesPlayed / 90) * 2; // 2 points per 90 minutes
+    
+    // Goals
+    switch(this.position) {
+      case 'GK':
+      case 'DEF':
+        points += this.stats.goals * 6;
+        break;
+      case 'MID':
+        points += this.stats.goals * 5;
+        break;
+      case 'FWD':
+        points += this.stats.goals * 4;
+        break;
+    }
+    
+    // Assists
+    points += this.stats.assists * 3;
+    
+    // Clean sheets
+    if (this.position === 'GK' || this.position === 'DEF') {
+      points += this.stats.cleanSheets * 4;
+    } else if (this.position === 'MID') {
+      points += this.stats.cleanSheets * 1;
+    }
+    
+    // Saves (Goalkeepers only)
+    if (this.position === 'GK') {
+      points += Math.floor(this.stats.saves / 3); // 1 point per 3 saves
+    }
+    
+    // Cards
+    points -= this.stats.yellowCards * 1;
+    points -= this.stats.redCards * 3;
+    
+    this.stats.totalPoints = points;
     return points;
   }
 
@@ -45,17 +73,15 @@ class Player {
         this[key] = data[key];
       }
     });
+    this.calculatePoints();
     this.updatedAt = new Date();
     return this;
   }
 
   // Update player stats and recalculate points
   updateStats(newStats) {
-    this.stats = {
-      ...this.stats,
-      ...newStats,
-    };
-    this.points = this.calculatePoints(); // Recalculate points when stats change
+    this.stats = { ...this.stats, ...newStats };
+    this.calculatePoints();
     this.updatedAt = new Date();
     return this;
   }
@@ -70,10 +96,34 @@ class Player {
       imageUrl: this.imageUrl,
       value: this.value,
       stats: this.stats, // Includes yellow/red cards now
-      points: this.points,
+      points: this.stats.totalPoints,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString()
     };
+  }
+
+  static isValidPosition(position) {
+    return ['GK', 'DEF', 'MID', 'FWD'].includes(position);
+  }
+
+  static getPositionColor(position) {
+    switch(position) {
+      case 'GK': return '#f1c40f';
+      case 'DEF': return '#2ecc71';
+      case 'MID': return '#3498db';
+      case 'FWD': return '#e74c3c';
+      default: return '#95a5a6';
+    }
+  }
+
+  static getFormationPositions(formation) {
+    const formations = {
+      '4-4-2': { GK: 1, DEF: 4, MID: 4, FWD: 2 },
+      '4-3-3': { GK: 1, DEF: 4, MID: 3, FWD: 3 },
+      '3-5-2': { GK: 1, DEF: 3, MID: 5, FWD: 2 },
+      '5-3-2': { GK: 1, DEF: 5, MID: 3, FWD: 2 }
+    };
+    return formations[formation] || formations['4-4-2'];
   }
 }
 

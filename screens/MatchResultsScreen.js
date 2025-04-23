@@ -11,28 +11,27 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Card, Button, TextInput as PaperInput, IconButton, Title, Paragraph, Provider as PaperProvider, Divider } from 'react-native-paper';
 import { usePlayerContext } from '../context/PlayerContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Player from '../models/Player';
 
-// Placeholder AddMatchResultModal component - we will build this out next
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.9;
+
 const AddMatchResultModal = ({ visible, onClose, onSave }) => {
-  const { Platform, Alert } = require('react-native');
   const { getSelectedTeamPlayers, getPlayerById } = usePlayerContext();
-  const teamPlayers = getSelectedTeamPlayers() || []; // Ensure it's an array
+  const teamPlayers = getSelectedTeamPlayers() || [];
 
-  // Form State
   const [opponentTeam, setOpponentTeam] = useState('');
   const [homeScore, setHomeScore] = useState('0');
   const [awayScore, setAwayScore] = useState('0');
   const [performances, setPerformances] = useState([]);
-
-  // State for Player Selection
   const [selectedPlayerForPerf, setSelectedPlayerForPerf] = useState(null);
-  const [playerSelectModalVisible, setPlayerSelectModalVisible] = useState(false); // New state for player list modal
+  const [playerSelectModalVisible, setPlayerSelectModalVisible] = useState(false);
 
-  // State for Performance Input Fields (when a player is selected)
   const [currentGoals, setCurrentGoals] = useState('0');
   const [currentAssists, setCurrentAssists] = useState('0');
   const [currentMins, setCurrentMins] = useState('0');
@@ -40,19 +39,6 @@ const AddMatchResultModal = ({ visible, onClose, onSave }) => {
   const [currentRed, setCurrentRed] = useState('0');
   const [currentSaves, setCurrentSaves] = useState('0');
   const [currentCS, setCurrentCS] = useState(false);
-
-  // Reset form when main modal closes or opens
-  useEffect(() => {
-    if (visible) {
-      setOpponentTeam('');
-      setHomeScore('0');
-      setAwayScore('0');
-      setPerformances([]);
-      setSelectedPlayerForPerf(null);
-      setPlayerSelectModalVisible(false); // Ensure player select modal is closed
-      resetPerfFields();
-    } 
-  }, [visible]);
 
   const resetPerfFields = () => {
     setCurrentGoals('0');
@@ -66,36 +52,23 @@ const AddMatchResultModal = ({ visible, onClose, onSave }) => {
 
   const handleAddPerformance = () => {
     if (!selectedPlayerForPerf) return;
-    
-    const existingPerfIndex = performances.findIndex(p => p.playerId === selectedPlayerForPerf.id);
+
     const newPerf = {
       playerId: selectedPlayerForPerf.id,
       name: selectedPlayerForPerf.name,
       goals: parseInt(currentGoals) || 0,
       assists: parseInt(currentAssists) || 0,
       minutesPlayed: parseInt(currentMins) || 0,
+      cleanSheet: currentCS,
+      saves: parseInt(currentSaves) || 0,
       yellowCards: parseInt(currentYellow) || 0,
       redCards: parseInt(currentRed) || 0,
-      saves: selectedPlayerForPerf.position === 'GK' ? (parseInt(currentSaves) || 0) : 0,
-      cleanSheet: (selectedPlayerForPerf.position === 'GK' || selectedPlayerForPerf.position === 'DEF') && currentCS,
     };
 
-    let updatedPerformances;
-    if (existingPerfIndex > -1) {
-      updatedPerformances = [...performances];
-      updatedPerformances[existingPerfIndex] = newPerf;
-    } else {
-      updatedPerformances = [...performances, newPerf];
-    }
-    setPerformances(updatedPerformances);
-    setSelectedPlayerForPerf(null); // Reset selection
+    setPerformances(prev => [...prev, newPerf]);
+    setSelectedPlayerForPerf(null);
     resetPerfFields();
   };
-
-  // Calculate available players for the selection modal
-  const availablePlayers = teamPlayers.filter(
-    player => !performances.some(p => p.playerId === player.id)
-  );
 
   const handlePlayerSelect = (player) => {
     setSelectedPlayerForPerf(player);
@@ -103,16 +76,73 @@ const AddMatchResultModal = ({ visible, onClose, onSave }) => {
     setPlayerSelectModalVisible(false);
   };
 
+  const calculateMatchPoints = (performances) => {
+    return performances.reduce((total, perf) => {
+      let points = 0;
+      
+      // Minutes played points
+      points += Math.floor(perf.minutesPlayed / 90) * 2;
+      
+      // Goals
+      const player = getPlayerById(perf.playerId);
+      if (player) {
+        switch(player.position) {
+          case 'GK':
+          case 'DEF':
+            points += perf.goals * 6;
+            break;
+          case 'MID':
+            points += perf.goals * 5;
+            break;
+          case 'FWD':
+            points += perf.goals * 4;
+            break;
+        }
+      }
+      
+      // Assists
+      points += perf.assists * 3;
+      
+      // Clean sheets
+      if (player && (player.position === 'GK' || player.position === 'DEF')) {
+        points += perf.cleanSheet ? 4 : 0;
+      } else if (player && player.position === 'MID') {
+        points += perf.cleanSheet ? 1 : 0;
+      }
+      
+      // Saves (Goalkeepers only)
+      if (player && player.position === 'GK') {
+        points += Math.floor(perf.saves / 3);
+      }
+      
+      // Cards
+      points -= perf.yellowCards * 1;
+      points -= perf.redCards * 3;
+      
+      return total + points;
+    }, 0);
+  };
+
   const handleInternalSave = () => {
-    if (!opponentTeam.trim()) { Alert.alert("Input Error", "Please enter opponent team name."); return; }
-    if (isNaN(parseInt(homeScore)) || isNaN(parseInt(awayScore))) { Alert.alert("Input Error", "Please enter valid scores."); return; }
+    if (!opponentTeam.trim()) {
+      Alert.alert("Input Error", "Please enter opponent team name.");
+      return;
+    }
+    if (isNaN(parseInt(homeScore)) || isNaN(parseInt(awayScore))) {
+      Alert.alert("Input Error", "Please enter valid scores.");
+      return;
+    }
+
+    const matchPoints = calculateMatchPoints(performances);
     
     const matchData = {
       opponentTeam: opponentTeam.trim(),
       score: `${parseInt(homeScore)}-${parseInt(awayScore)}`,
-      date: new Date().toISOString(), 
-      playerPerformances: performances, 
+      date: new Date().toISOString(),
+      playerPerformances: performances,
+      totalPoints: matchPoints,
     };
+    
     onSave(matchData);
   };
 
@@ -134,7 +164,6 @@ const AddMatchResultModal = ({ visible, onClose, onSave }) => {
           </View>
 
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
-            {/* Match Details */}
             <PaperInput
               label="Opponent Team"
               value={opponentTeam}
@@ -164,211 +193,200 @@ const AddMatchResultModal = ({ visible, onClose, onSave }) => {
 
             <Divider style={styles.divider} />
 
-            {/* Player Performances Section */}
             <Title style={styles.sectionTitle}>Player Performances</Title>
             
-            {/* Display Added Performances */}
             {performances.map((perf, index) => (
-              <Card key={index} style={styles.perfCard} elevation={0}>
+              <Card key={index} style={styles.perfCard}>
                 <Card.Content style={styles.perfCardContent}>
-                  <Text style={styles.perfPlayerName}>{perf.name}</Text>
-                  {/* Display summary of stats added */}
-                  <View style={styles.perfStatsSummary}>
-                    {perf.goals > 0 && <Text style={styles.perfStat}>G:{perf.goals} </Text>}
-                    {perf.assists > 0 && <Text style={styles.perfStat}>A:{perf.assists} </Text>}
-                    {perf.minutesPlayed > 0 && <Text style={styles.perfStat}>M:{perf.minutesPlayed} </Text>}
-                    {perf.cleanSheet && <Text style={styles.perfStat}>CS </Text>}
-                    {perf.saves > 0 && <Text style={styles.perfStat}>S:{perf.saves} </Text>}
-                    {perf.yellowCards > 0 && <Text style={styles.perfStat}>YC:{perf.yellowCards} </Text>}
-                    {perf.redCards > 0 && <Text style={styles.perfStat}>RC:{perf.redCards} </Text>}
+                  <View style={styles.perfInfo}>
+                    <Text style={styles.perfPlayerName}>{perf.name}</Text>
+                    <View style={styles.perfStatsSummary}>
+                      {perf.goals > 0 && <Text style={styles.perfStat}>G:{perf.goals} </Text>}
+                      {perf.assists > 0 && <Text style={styles.perfStat}>A:{perf.assists} </Text>}
+                      {perf.minutesPlayed > 0 && <Text style={styles.perfStat}>M:{perf.minutesPlayed} </Text>}
+                      {perf.cleanSheet && <Text style={styles.perfStat}>CS </Text>}
+                      {perf.saves > 0 && <Text style={styles.perfStat}>S:{perf.saves} </Text>}
+                      {perf.yellowCards > 0 && <Text style={styles.perfStat}>YC:{perf.yellowCards} </Text>}
+                      {perf.redCards > 0 && <Text style={styles.perfStat}>RC:{perf.redCards} </Text>}
+                    </View>
                   </View>
-                   <IconButton 
-                      icon="pencil-outline" 
-                      size={18} 
-                      onPress={() => {
-                          const player = getPlayerById(perf.playerId);
-                          setSelectedPlayerForPerf(player);
-                          setCurrentGoals(String(perf.goals));
-                          setCurrentAssists(String(perf.assists));
-                          setCurrentMins(String(perf.minutesPlayed));
-                          setCurrentYellow(String(perf.yellowCards));
-                          setCurrentRed(String(perf.redCards));
-                          setCurrentSaves(String(perf.saves));
-                          setCurrentCS(perf.cleanSheet);
-                      }}
-                    />
+                  <IconButton 
+                    icon="pencil-outline" 
+                    size={18} 
+                    onPress={() => {
+                      const player = getPlayerById(perf.playerId);
+                      setSelectedPlayerForPerf(player);
+                      setCurrentGoals(String(perf.goals));
+                      setCurrentAssists(String(perf.assists));
+                      setCurrentMins(String(perf.minutesPlayed));
+                      setCurrentYellow(String(perf.yellowCards));
+                      setCurrentRed(String(perf.redCards));
+                      setCurrentSaves(String(perf.saves));
+                      setCurrentCS(perf.cleanSheet);
+                    }}
+                  />
                 </Card.Content>
               </Card>
             ))}
 
-            {/* Input area for selected player performance */}
             {selectedPlayerForPerf ? (
-              <Card style={[styles.perfInputCard, {marginTop: performances.length > 0 ? 10 : 0}]} elevation={0}>
-                <Card.Title 
-                  title={`Performance for ${selectedPlayerForPerf.name}`} 
-                  titleStyle={{fontSize: 16}}
-                  right={(props) => <IconButton {...props} icon="close-circle" onPress={() => { setSelectedPlayerForPerf(null); resetPerfFields(); }} />}
-                />
+              <Card style={styles.perfInputCard}>
                 <Card.Content>
+                  <Text style={styles.selectedPlayerName}>{selectedPlayerForPerf.name}</Text>
                   <View style={styles.perfInputGrid}>
-                    <StatInputModal label="Goals" value={currentGoals} onChangeText={setCurrentGoals} />
-                    <StatInputModal label="Assists" value={currentAssists} onChangeText={setCurrentAssists} />
-                    <StatInputModal label="Mins Played" value={currentMins} onChangeText={setCurrentMins} />
-                     {(selectedPlayerForPerf.position === 'GK' || selectedPlayerForPerf.position === 'DEF') && (
-                         <TouchableOpacity onPress={() => setCurrentCS(!currentCS)} style={styles.checkboxContainer}>
-                             <MaterialCommunityIcons name={currentCS ? 'checkbox-marked' : 'checkbox-blank-outline'} size={24} color="#1a73e8" />
-                             <Text style={styles.checkboxLabel}>Clean Sheet</Text>
-                         </TouchableOpacity>
-                     )}
-                    {selectedPlayerForPerf.position === 'GK' && (
-                        <StatInputModal label="Saves" value={currentSaves} onChangeText={setCurrentSaves} />
-                    )}
-                    <StatInputModal label="Yellow Cards" value={currentYellow} onChangeText={setCurrentYellow} />
-                    <StatInputModal label="Red Cards" value={currentRed} onChangeText={setCurrentRed} />
+                    <View style={styles.statInputContainer}>
+                      <PaperInput
+                        label="Goals"
+                        value={currentGoals}
+                        onChangeText={setCurrentGoals}
+                        keyboardType="numeric"
+                        mode="outlined"
+                        style={styles.statInput}
+                      />
+                    </View>
+                    <View style={styles.statInputContainer}>
+                      <PaperInput
+                        label="Assists"
+                        value={currentAssists}
+                        onChangeText={setCurrentAssists}
+                        keyboardType="numeric"
+                        mode="outlined"
+                        style={styles.statInput}
+                      />
+                    </View>
+                    <View style={styles.statInputContainer}>
+                      <PaperInput
+                        label="Minutes"
+                        value={currentMins}
+                        onChangeText={setCurrentMins}
+                        keyboardType="numeric"
+                        mode="outlined"
+                        style={styles.statInput}
+                      />
+                    </View>
+                    <View style={styles.statInputContainer}>
+                      <PaperInput
+                        label="Saves"
+                        value={currentSaves}
+                        onChangeText={setCurrentSaves}
+                        keyboardType="numeric"
+                        mode="outlined"
+                        style={styles.statInput}
+                      />
+                    </View>
+                    <View style={styles.statInputContainer}>
+                      <PaperInput
+                        label="Yellow Cards"
+                        value={currentYellow}
+                        onChangeText={setCurrentYellow}
+                        keyboardType="numeric"
+                        mode="outlined"
+                        style={styles.statInput}
+                      />
+                    </View>
+                    <View style={styles.statInputContainer}>
+                      <PaperInput
+                        label="Red Cards"
+                        value={currentRed}
+                        onChangeText={setCurrentRed}
+                        keyboardType="numeric"
+                        mode="outlined"
+                        style={styles.statInput}
+                      />
+                    </View>
                   </View>
-                   <Button 
-                      mode="contained" 
-                      onPress={handleAddPerformance} 
-                      style={{marginTop: 15}}
-                      icon="check"
-                   >
-                      Confirm Performance
-                   </Button>
+                  <View style={styles.checkboxContainer}>
+                    <TouchableOpacity
+                      style={styles.checkbox}
+                      onPress={() => setCurrentCS(!currentCS)}
+                    >
+                      <MaterialCommunityIcons
+                        name={currentCS ? "checkbox-marked" : "checkbox-blank-outline"}
+                        size={24}
+                        color="#1a73e8"
+                      />
+                      <Text style={styles.checkboxLabel}>Clean Sheet</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Button 
+                    mode="contained" 
+                    onPress={handleAddPerformance}
+                    style={styles.confirmButton}
+                  >
+                    Confirm Performance
+                  </Button>
                 </Card.Content>
               </Card>
             ) : (
-              /* Player Selection Button */
               <Button 
                 icon="account-plus-outline" 
                 mode="outlined" 
-                onPress={() => setPlayerSelectModalVisible(true)} // Open new modal
-                disabled={availablePlayers.length === 0} // Disable if no players left to add
-                style={{marginTop: 10}}
+                onPress={() => setPlayerSelectModalVisible(true)}
+                style={styles.addPlayerButton}
               >
-                {teamPlayers.length === 0 ? 'No players in team' : availablePlayers.length === 0 ? 'All player performances added' : 'Select Player to Add Performance'}
+                Add Player Performance
               </Button>
             )}
-
           </ScrollView>
-          
-           {/* Save Button Area */}
-          <View style={styles.modalActions}>
-               <Button 
-                  icon="content-save" 
-                  mode="contained" 
-                  onPress={handleInternalSave}
-                  disabled={!opponentTeam.trim() || isNaN(parseInt(homeScore)) || isNaN(parseInt(awayScore))}
-                  style={styles.saveMatchButton}
-              >
-                  Save Match
-              </Button>
-          </View>
-        </View>
-       </KeyboardAvoidingView>
 
-      {/* Player Selection Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={playerSelectModalVisible}
-        onRequestClose={() => setPlayerSelectModalVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.playerSelectModalOverlay} 
-          activeOpacity={1} 
-          onPressOut={() => setPlayerSelectModalVisible(false)} // Close on touching outside
-        >
-          <View style={styles.playerSelectModalContainer}>
-            <Title style={styles.playerSelectTitle}>Select Player</Title>
-            <FlatList
-              data={availablePlayers}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.playerSelectItem} 
-                  onPress={() => handlePlayerSelect(item)}
-                >
-                  <Text style={styles.playerSelectItemText}>{item.name} ({item.position})</Text>
-                </TouchableOpacity>
-              )}
-              ItemSeparatorComponent={() => <View style={styles.playerSelectSeparator} />}
-            />
-            <Button onPress={() => setPlayerSelectModalVisible(false)} style={{marginTop: 10}}>
-                Cancel
+          <View style={styles.modalActions}>
+            <Button 
+              mode="contained" 
+              onPress={handleInternalSave}
+              style={styles.saveButton}
+            >
+              Save Match
             </Button>
           </View>
-        </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={playerSelectModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setPlayerSelectModalVisible(false)}
+      >
+        <View style={styles.playerSelectModal}>
+          <View style={styles.playerSelectContent}>
+            <Title>Select Player</Title>
+            <ScrollView>
+              {teamPlayers.map(player => (
+                <TouchableOpacity
+                  key={player.id}
+                  style={styles.playerSelectItem}
+                  onPress={() => handlePlayerSelect(player)}
+                >
+                  <Text style={styles.playerSelectName}>{player.name}</Text>
+                  <Text style={styles.playerSelectPosition}>{player.position}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Button
+              mode="outlined"
+              onPress={() => setPlayerSelectModalVisible(false)}
+              style={styles.closeButton}
+            >
+              Close
+            </Button>
+          </View>
+        </View>
       </Modal>
     </Modal>
   );
 };
 
-// Reusable Stat Input Component for Modal
-const StatInputModal = ({ label, value, onChangeText }) => (
-  <View style={styles.statInputModalContainer}>
-    <PaperInput
-      label={label}
-      value={value}
-      onChangeText={onChangeText}
-      mode="outlined"
-      keyboardType="numeric"
-      style={styles.statInput}
-      dense // Make input smaller
-    />
-  </View>
-);
-
 const MatchResultsScreen = ({ navigation }) => {
-  const { 
-    matchResults, 
-    addMatchResult, 
-    updatePlayerStats, 
-    getPlayerById, 
-    getSelectedTeamPlayers,
-    selectedTeam 
-  } = usePlayerContext();
   const [modalVisible, setModalVisible] = useState(false);
-
-  // Add header button only if there are players in the team
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <IconButton
-          icon="plus-circle-outline"
-          color="#fff"
-          size={28}
-          onPress={() => {
-            if (!selectedTeam || selectedTeam.length === 0) {
-              Alert.alert(
-                "No Team Selected",
-                "Please add players to your team before recording match results.",
-                [{ text: "OK" }]
-              );
-              return;
-            }
-            setModalVisible(true);
-          }}
-          style={{ marginRight: 10 }}
-        />
-      ),
-    });
-  }, [navigation, selectedTeam]);
+  const { matchResults, addMatchResult, updatePlayerStats, getPlayerById } = usePlayerContext();
 
   const handleSaveMatch = useCallback((matchData) => {
-    console.log("Saving Match: ", matchData);
-    
-    // 1. Save basic match info
-    addMatchResult({ 
-      opponentTeam: matchData.opponentTeam,
-      score: matchData.score,
-      date: matchData.date, 
-    });
+    addMatchResult(matchData);
 
-    // 2. Update player stats based on performance
     matchData.playerPerformances.forEach(perf => {
       const player = getPlayerById(perf.playerId);
       if (player) {
-        const currentStats = player.stats; // Get current TOTAL stats
+        const currentStats = player.stats;
         const updatedStats = {
           ...currentStats,
           goals: (currentStats.goals || 0) + perf.goals,
@@ -379,22 +397,48 @@ const MatchResultsScreen = ({ navigation }) => {
           yellowCards: (currentStats.yellowCards || 0) + perf.yellowCards,
           redCards: (currentStats.redCards || 0) + perf.redCards,
         };
-        updatePlayerStats(perf.playerId, updatedStats); // Update context/player object
+        updatePlayerStats(perf.playerId, updatedStats);
       }
     });
 
-    setModalVisible(false); // Close modal after saving
+    setModalVisible(false);
   }, [addMatchResult, updatePlayerStats, getPlayerById]);
 
   const renderMatchCard = ({ item }) => (
     <Card style={styles.matchCard}>
       <Card.Content>
-        <View style={styles.cardTitleRow}>
-          <Title style={styles.opponentTitle}>vs {item.opponentTeam}</Title>
-          {/* Add date here if stored */}
+        <View style={styles.matchHeader}>
+          <View style={styles.matchInfo}>
+            <Title style={styles.opponentTitle}>vs {item.opponentTeam}</Title>
+            <Text style={styles.matchDate}>
+              {new Date(item.date).toLocaleDateString()}
+            </Text>
+          </View>
+          <View style={styles.scoreContainer}>
+            <Text style={styles.scoreText}>{item.score}</Text>
+          </View>
         </View>
-        <Paragraph style={styles.scoreText}>Score: {item.score}</Paragraph>
-        {/* Optionally display player performances summary */}
+        <Divider style={styles.divider} />
+        <View style={styles.pointsContainer}>
+          <Text style={styles.pointsLabel}>Total Points:</Text>
+          <Text style={styles.pointsValue}>{item.totalPoints}</Text>
+        </View>
+        <View style={styles.performancesContainer}>
+          {item.playerPerformances.map((perf, index) => (
+            <View key={index} style={styles.performanceItem}>
+              <Text style={styles.performanceName}>{perf.name}</Text>
+              <View style={styles.performanceStats}>
+                {perf.goals > 0 && <Text style={styles.performanceStat}>G:{perf.goals} </Text>}
+                {perf.assists > 0 && <Text style={styles.performanceStat}>A:{perf.assists} </Text>}
+                {perf.minutesPlayed > 0 && <Text style={styles.performanceStat}>M:{perf.minutesPlayed} </Text>}
+                {perf.cleanSheet && <Text style={styles.performanceStat}>CS </Text>}
+                {perf.saves > 0 && <Text style={styles.performanceStat}>S:{perf.saves} </Text>}
+                {perf.yellowCards > 0 && <Text style={styles.performanceStat}>YC:{perf.yellowCards} </Text>}
+                {perf.redCards > 0 && <Text style={styles.performanceStat}>RC:{perf.redCards} </Text>}
+              </View>
+            </View>
+          ))}
+        </View>
       </Card.Content>
     </Card>
   );
@@ -403,17 +447,19 @@ const MatchResultsScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {matchResults.length === 0 ? (
-          // Empty State
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="clipboard-text-off-outline" size={60} color="#bdc3c7" />
             <Text style={styles.emptyStateText}>No matches recorded</Text>
             <Text style={styles.emptyStateSubText}>Add a match result to get started</Text>
-            <Button mode="contained" onPress={() => setModalVisible(true)} style={styles.emptyStateButton}>
+            <Button 
+              mode="contained" 
+              onPress={() => setModalVisible(true)} 
+              style={styles.emptyStateButton}
+            >
               Add First Match
             </Button>
           </View>
         ) : (
-          // Results List
           <FlatList
             data={matchResults}
             renderItem={renderMatchCard}
@@ -423,7 +469,6 @@ const MatchResultsScreen = ({ navigation }) => {
         )}
       </View>
 
-      {/* Add Match Result Modal */}
       <AddMatchResultModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -436,12 +481,12 @@ const MatchResultsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#f5f5f5',
   },
   container: {
     flex: 1,
+    padding: 16,
   },
-  // Empty State Styles
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -454,7 +499,6 @@ const styles = StyleSheet.create({
     color: '#555',
     marginTop: 15,
     marginBottom: 5,
-    textAlign: 'center',
   },
   emptyStateSubText: {
     fontSize: 14,
@@ -463,74 +507,40 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyStateButton: {
-    // Use primary color from theme if available
+    marginTop: 10,
   },
-  // List Styles
   listContainer: {
-    padding: 16,
+    paddingBottom: 16,
   },
   matchCard: {
-    marginBottom: 12,
-    backgroundColor: 'white',
+    marginBottom: 16,
+    elevation: 2,
   },
-  cardTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
-  },
-  opponentTitle: {
-    fontSize: 18, 
-    fontWeight: 'bold',
-  },
-  scoreText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  // Modal Styles (Basic)
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    // paddingVertical: 20, // Padding handled by header/actions/scrollview
-    // paddingHorizontal: 15,
-    // minHeight: '60%', 
-    maxHeight: '90%',
-    overflow: 'hidden',
-  },
-  modalHeader: {
+  matchHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    // paddingBottom: 10,
-    // marginBottom: 10,
+    marginBottom: 8,
   },
-  modalScrollContent: {
-    paddingHorizontal: 15,
-    paddingTop: 15,
-    paddingBottom: 20, // Space before save button
+  matchInfo: {
+    flex: 1,
   },
-  modalInput: {
-    backgroundColor: 'white',
-    marginBottom: 12,
+  opponentTitle: {
+    fontSize: 18,
+    marginBottom: 4,
+  },
+  matchDate: {
+    fontSize: 14,
+    color: '#666',
   },
   scoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
   },
-  scoreInput: {
-    flex: 1,
-    backgroundColor: 'white',
+  scoreText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a73e8',
   },
   scoreSeparator: {
     fontSize: 24,
@@ -538,126 +548,193 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   divider: {
-    marginVertical: 15,
+    marginVertical: 12,
+  },
+  pointsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pointsLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  pointsValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a73e8',
+  },
+  performancesContainer: {
+    marginTop: 8,
+  },
+  performanceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  performanceName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  performanceStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  performanceStat: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    marginTop: 50,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalScrollContent: {
+    padding: 16,
+  },
+  modalInput: {
+    marginBottom: 16,
+  },
+  scoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scoreInput: {
+    flex: 1,
+  },
+  divider: {
+    marginVertical: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   perfCard: {
     marginBottom: 8,
-    backgroundColor: '#f8f9fa',
-    elevation: 0,
   },
   perfCardContent: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8, // Reduce padding
-    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  perfInfo: {
+    flex: 1,
   },
   perfPlayerName: {
-    fontWeight: 'bold',
-    flexShrink: 1, // Prevent long names pushing button off
-    marginRight: 5,
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
   },
   perfStatsSummary: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    flexGrow: 1, // Take up available space
-    justifyContent: 'flex-start',
-    marginRight: 5,
   },
   perfStat: {
     fontSize: 12,
-    color: '#555',
-    marginRight: 5,
-    backgroundColor: '#e9ecef',
+    color: '#666',
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 3,
-    overflow: 'hidden', 
-    marginBottom: 2,
-    marginTop: 2,
   },
   perfInputCard: {
-    marginBottom: 15,
-    borderColor: '#ddd',
-    borderWidth: 1,
-    elevation: 0,
+    marginTop: 16,
+  },
+  selectedPlayerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
   },
   perfInputGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-   statInputModalContainer: {
-    width: '48%', // Adjust width for desired layout
-    marginBottom: 10,
+  statInputContainer: {
+    width: '48%',
+    marginBottom: 12,
+  },
+  statInput: {
+    backgroundColor: '#fff',
   },
   checkboxContainer: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  checkbox: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '48%', // Match other inputs
-    marginBottom: 10,
-    // paddingVertical: 10, // Add padding for touch area
   },
   checkboxLabel: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#333',
+    color: '#666',
+  },
+  confirmButton: {
+    marginTop: 8,
+  },
+  addPlayerButton: {
+    marginTop: 16,
   },
   modalActions: {
-    padding: 15,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#eee',
-    backgroundColor: 'white',
   },
-  saveMatchButton: {
-    // Style as needed
+  saveButton: {
+    backgroundColor: '#1a73e8',
   },
-   statInput: {
-    backgroundColor: 'white',
-  },
-  playerSelectModalOverlay: {
+  playerSelectModal: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)', // Dim background
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  playerSelectModalContainer: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
-    width: '80%',
-    maxHeight: '70%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowRadius: 4,
-        shadowOpacity: 0.25,
-      },
-      android: {
-        elevation: 5,
-      },
-    }),
-  },
-  playerSelectTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
+  playerSelectContent: {
+    backgroundColor: '#fff',
+    margin: 20,
+    borderRadius: 8,
+    padding: 16,
+    maxHeight: '80%',
   },
   playerSelectItem: {
-    paddingVertical: 12,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  playerSelectItemText: {
+  playerSelectName: {
     fontSize: 16,
+    fontWeight: '500',
   },
-  playerSelectSeparator: {
-    height: 1,
-    backgroundColor: '#eee',
+  playerSelectPosition: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  closeButton: {
+    marginTop: 16,
   },
 });
 

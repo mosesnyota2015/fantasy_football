@@ -73,45 +73,59 @@ export default function App() {
         <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
         <NavigationContainer>
           <Tab.Navigator
-            screenOptions={({ route }) => ({
-              tabBarIcon: ({ focused, color, size }) => {
-                let iconName;
-                if (route.name === 'PlayersTab') {
-                  iconName = focused ? 'account-group' : 'account-group-outline';
-                } else if (route.name === 'TeamTab') {
-                  iconName = focused ? 'shield-account' : 'shield-account-outline';
-                } else if (route.name === 'ResultsTab') {
-                  iconName = focused ? 'trophy' : 'trophy-outline';
-                } else if (route.name === 'SettingsTab') {
-                  iconName = focused ? 'cog' : 'cog-outline';
-                }
-                // You can return any component that you like here!
-                return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
+            screenOptions={{
+              tabBarStyle: {
+                backgroundColor: '#fff',
+                borderTopWidth: 1,
+                borderTopColor: '#e0e0e0',
+                height: 60,
+                paddingBottom: 8,
+                paddingTop: 8,
               },
-              tabBarActiveTintColor: theme.colors.primary,
-              tabBarInactiveTintColor: 'gray',
-              headerShown: false, // Hide header for tabs, Stack navigator handles its own header
-            })}
+              tabBarActiveTintColor: '#1a73e8',
+              tabBarInactiveTintColor: '#757575',
+              headerShown: false,
+            }}
           >
-            <Tab.Screen 
-              name="PlayersTab" 
-              component={PlayerStackNavigator} 
-              options={{ title: 'Players' }} 
+            <Tab.Screen
+              name="Players"
+              component={PlayerStackNavigator}
+              options={{
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="format-list-bulleted" size={size} color={color} />
+                ),
+                tabBarLabelStyle: { fontSize: 12 },
+              }}
             />
-            <Tab.Screen 
-              name="TeamTab" 
-              component={TeamScreen} 
-              options={{ title: 'Team', headerShown: true, headerStyle: { backgroundColor: theme.colors.primary }, headerTintColor: '#fff'}} // Show header for placeholder
+            <Tab.Screen
+              name="Team"
+              component={TeamScreen}
+              options={{
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="account-group" size={size} color={color} />
+                ),
+                tabBarLabelStyle: { fontSize: 12 },
+              }}
             />
-            <Tab.Screen 
-              name="ResultsTab" 
-              component={MatchResultsScreen} 
-              options={{ title: 'Results', headerShown: true, headerStyle: { backgroundColor: theme.colors.primary }, headerTintColor: '#fff'}} // Show header
+            <Tab.Screen
+              name="Results"
+              component={MatchResultsScreen}
+              options={{
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+                ),
+                tabBarLabelStyle: { fontSize: 12 },
+              }}
             />
-            <Tab.Screen 
-              name="SettingsTab" 
-              component={SettingsScreen} 
-              options={{ title: 'Settings', headerShown: true, headerStyle: { backgroundColor: theme.colors.primary }, headerTintColor: '#fff'}} // Show header for placeholder
+            <Tab.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="cog" size={size} color={color} />
+                ),
+                tabBarLabelStyle: { fontSize: 12 },
+              }}
             />
           </Tab.Navigator>
         </NavigationContainer>
