@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Player from '../models/Player';
 
 // Helper function to create player stats
@@ -58,10 +59,86 @@ const PlayerContext = createContext();
 
 // Context provider component
 export const PlayerProvider = ({ children }) => {
-  const [players, setPlayers] = useState(INITIAL_PLAYERS);
+  const [players, setPlayers] = useState([]);
   const [matchResults, setMatchResults] = useState([]);
-  const [selectedTeam, setSelectedTeam] = useState([]); // Array of player IDs
+  const [selectedTeam, setSelectedTeam] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load saved data when the app starts
+  useEffect(() => {
+    loadSavedData();
+  }, []);
+
+  // Save data whenever it changes
+  useEffect(() => {
+    if (!isLoading) {
+      saveData();
+    }
+  }, [players, matchResults, selectedTeam]);
+
+  const loadSavedData = async () => {
+    try {
+      const savedData = await AsyncStorage.getItem('playerData');
+      if (savedData) {
+        const { players: savedPlayers, matchResults: savedResults, selectedTeam: savedTeam } = JSON.parse(savedData);
+        
+        // Convert saved player data back to Player instances
+        const parsedPlayers = savedPlayers.map(playerData => {
+          const player = new Player(
+            playerData.id,
+            playerData.name,
+            playerData.position,
+            playerData.team,
+            playerData.imageUrl,
+            playerData.value,
+            playerData.stats
+          );
+          player.createdAt = new Date(playerData.createdAt);
+          player.updatedAt = new Date(playerData.updatedAt);
+          return player;
+        });
+        
+        setPlayers(parsedPlayers);
+        setMatchResults(savedResults);
+        setSelectedTeam(savedTeam);
+      } else {
+        // If no saved data, use initial data
+        setPlayers(INITIAL_PLAYERS);
+      }
+    } catch (error) {
+      console.error('Error loading saved data:', error);
+      setPlayers(INITIAL_PLAYERS);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      // Convert Player instances to plain objects for storage
+      const playersToSave = players.map(player => ({
+        id: player.id,
+        name: player.name,
+        position: player.position,
+        team: player.team,
+        imageUrl: player.imageUrl,
+        value: player.value,
+        stats: player.stats,
+        createdAt: player.createdAt.toISOString(),
+        updatedAt: player.updatedAt.toISOString()
+      }));
+
+      const dataToSave = {
+        players: playersToSave,
+        matchResults,
+        selectedTeam
+      };
+      await AsyncStorage.setItem('playerData', JSON.stringify(dataToSave));
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
+  };
 
   // Add a new player (now expects stats object)
   const addPlayer = (name, position, team, imageUrl, value, stats) => {
@@ -146,9 +223,15 @@ export const PlayerProvider = ({ children }) => {
     setSelectedPlayers([]);
   };
 
-  const resetAllData = () => {
-    setPlayers(INITIAL_PLAYERS);
-    setSelectedPlayers([]);
+  const resetAllData = async () => {
+    try {
+      await AsyncStorage.clear();
+      setPlayers(INITIAL_PLAYERS);
+      setSelectedTeam([]);
+      setMatchResults([]);
+    } catch (error) {
+      console.error('Error resetting data:', error);
+    }
   };
 
   // Context value

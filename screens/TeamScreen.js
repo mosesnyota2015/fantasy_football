@@ -7,11 +7,12 @@ import {
     TouchableOpacity,
     ScrollView,
     Image,
+    Platform,
 } from 'react-native';
 import { usePlayerContext } from '../context/PlayerContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const TeamScreen = () => {
+const TeamScreen = ({ navigation }) => {
     const { getSelectedTeamPlayers, removeFromTeam } = usePlayerContext();
     const [formation, setFormation] = useState('4-4-2');
     const selectedPlayers = getSelectedTeamPlayers();
@@ -39,6 +40,19 @@ const TeamScreen = () => {
         const fwd = positionCounts.FWD.current;
         setFormation(`${def}-${mid}-${fwd}`);
     }, [selectedPlayers]);
+
+    useEffect(() => {
+        navigation.setOptions({
+            headerRight: () => (
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('AddPlayer')}
+                    style={{ marginRight: 16 }}
+                >
+                    <MaterialCommunityIcons name="plus-circle-outline" size={28} color="#fff" />
+                </TouchableOpacity>
+            ),
+        });
+    }, [navigation]);
 
     const getPositionColor = (position) => {
         switch (position) {
@@ -181,11 +195,17 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         borderRadius: 16,
         padding: 16,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+            },
+            android: {
+                elevation: 2,
+            },
+        }),
     },
     cardTitle: {
         fontSize: 20,

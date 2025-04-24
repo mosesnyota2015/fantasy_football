@@ -27,23 +27,21 @@ const FeatureCard = ({ icon, title, description, delay }) => {
   }, []);
 
   return (
-    <View style={styles.featureCardShadow}>
-      <Animated.View style={[
-        styles.featureCard,
-        {
-          transform: [{ translateY }],
-          opacity
-        }
-      ]}>
-        <View style={styles.iconContainer}>
-          <MaterialCommunityIcons name={icon} size={32} color="#1a73e8" />
-        </View>
-        <View style={styles.featureTextContainer}>
-          <Text style={styles.featureTitle}>{title}</Text>
-          <Text style={styles.featureDescription}>{description}</Text>
-        </View>
-      </Animated.View>
-    </View>
+    <Animated.View style={[
+      styles.featureCard,
+      {
+        transform: [{ translateY }],
+        opacity
+      }
+    ]}>
+      <View style={styles.iconContainer}>
+        <MaterialCommunityIcons name={icon} size={32} color="#1a73e8" />
+      </View>
+      <View style={styles.featureTextContainer}>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDescription}>{description}</Text>
+      </View>
+    </Animated.View>
   );
 };
 
@@ -175,20 +173,17 @@ const styles = StyleSheet.create({
   cardContainer: {
     paddingHorizontal: 20,
   },
-  featureCardShadow: {
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    backgroundColor: 'transparent',
-    marginBottom: 20,
-  },
   featureCard: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 15,
     padding: 20,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
   },
   iconContainer: {
     width: 60,
